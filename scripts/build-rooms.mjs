@@ -1,198 +1,179 @@
 #!/usr/bin/env node
 import { writeFileSync } from 'fs';
 
-const RW = 9, RH = 9;
+const RW = 11, RH = 10;
 const W = (c, r) => ({ img: 'Walls_interior.png', c, r });
 const O = (c, r) => ({ img: 'Interior_objects.png', c, r });
 const F = (c, r) => ({ img: 'Forge.png', c, r });
 const L = (c, r) => ({ img: 'Light_animation.png', c, r });
 
-// Floor types
-const STONE_FLOOR = () => W(15, 8);          // blue-grey stone
-const WOOD_FLOOR = (x, y) => {               // warm brown wood
-  const w = [[9,1],[9,2],[9,3],[9,4],[9,5],[9,0]];
-  return W(...w[(x*3 + y*7) % w.length]);
+const STONE = () => W(15, 8);
+const WOOD = (x, y) => {
+  const p = [[9,0],[9,1],[9,2],[9,3],[9,4],[9,5]];
+  return W(...p[(x * 3 + y * 7) % p.length]);
 };
-const DARK_FLOOR = (x, y) => W(5 + ((x+y) % 2), 14);  // dark stone arches
+
+function blk(obj, ox, oy, mkTile, sc, sr, w, h) {
+  for (let dy = 0; dy < h; dy++)
+    for (let dx = 0; dx < w; dx++)
+      obj[`${ox+dx},${oy+dy}`] = mkTile(sc+dx, sr+dy);
+}
 
 function makeRoom(floorFn) {
   const t = {};
   const s = (x, y, v) => { t[`${x},${y}`] = v; };
-  // Walls
   for (let x = 0; x < RW; x++) {
     s(x, 0, W(x % 13, 8));
     s(x, 1, W(x % 13, 9));
-    s(x, RH-1, W(x % 13, 10));
+    s(x, RH - 1, W(x % 13, 10));
   }
-  // Floor
-  for (let y = 2; y < RH-1; y++)
+  for (let y = 2; y < RH - 1; y++)
     for (let x = 0; x < RW; x++)
       s(x, y, floorFn(x, y));
-  // Side walls
-  for (let y = 2; y < RH-1; y++) {
-    s(0, y, W(3, 9));
-    s(RW-1, y, W(4, 9));
+  for (let y = 2; y < RH - 1; y++) {
+    s(0, y, W(3, 9)); s(RW-1, y, W(4, 9));
   }
-  // Corners
   s(0, 0, W(3, 8)); s(RW-1, 0, W(4, 8));
   s(0, 1, W(3, 9)); s(RW-1, 1, W(4, 9));
   s(0, RH-1, W(3, 10)); s(RW-1, RH-1, W(4, 10));
   return t;
 }
 
-// 1. FORGE (Coding) — Stone floor, furnace, coal, tools
+// ══════════════════════════════════════════════════
+// VERIFIED TILE STAMPS (visually confirmed):
+//
+// BOOKSHELVES (3×4):
+//   filled_A: O(0-2, 8-11)  — gold chalice, blue vase, green bottle
+//   filled_B: O(3-5, 8-11)  — vases, blue/green bottles
+//   filled_C: O(6-8, 8-11)  — different vase arrangement
+//   filled_D: O(9-11, 8-11) — yet another style
+//   empty_A:  O(0-2, 12-15) — bare wooden shelves
+//   empty_B:  O(3-5, 12-15) — bare wooden shelves
+//   empty_C:  O(6-8, 12-15) — bare wooden shelves
+//
+// POTION SHELVES (3×4, wall-mounted angled view):
+//   potion_A: O(0-2, 4-7)   — left-facing shelf with potions
+//   potion_B: O(3-5, 4-7)   — right-facing shelf with potions
+//
+// DECORATIVE (various):
+//   amber_lantern:    O(0-1, 16-19)  2×4  — ornate amber/gold lantern
+//   diamond_rug_A:    O(2-3, 16-19)  2×4  — green rug with red tulip
+//   diamond_rug_B:    O(4-5, 16-19)  2×4  — green rug with tulip
+//   stained_glass:    O(7-10, 16-19) 4×4  — purple dragon display ★
+//   potted_plant:     O(11-12, 17-19) 2×3  — crystal leaf plant
+//
+// COUNTER (long bar): O(0-11, 0-1) 12×2  — use subsets
+//
+// CARPET: O(0-3, 24-26) 4×3  — blue/purple ornate rug
+//
+// FURNITURE (2×2):
+//   wardrobe_A: O(0-1, 27-28)   wardrobe_B: O(2-3, 27-28)
+//   wardrobe_C: O(4-5, 27-28)   wardrobe_D: O(6-7, 27-28)
+//   barrel:     O(8-9, 27-28)
+//   couch_brown: O(0-1, 30-31)  bed:         O(3-4, 30-31)
+//   table_items: O(7-8, 30-31)  bench_blue:  O(9-10, 30-31)
+//   table_brown: O(11-12, 30-31)
+//   table_flowers: O(0-1, 32-33)  couch_blue: O(5-6, 32-33)
+//   bench_long:    O(7-8, 32-33)  table_lg:   O(11-12, 32-33)
+//
+// FLOWER VASES (1×2): O(4,33-34) O(5,33-34) O(6,33-34) O(7,33-34)
+//
+// FLOOR ITEMS (2×3): A: O(8-9,34-36)  B: O(10-11,34-36)
+//
+// FORGE: F(0-3, 0-5) 4×6
+// LIGHT: L(0-7, 0-2) any width × 3
+// ══════════════════════════════════════════════════
+
+// 1. FORGE — Stone floor. Furnace center, potion shelves flanking.
 function forgeRoom() {
-  const base = makeRoom(() => STONE_FLOOR());
+  const base = makeRoom(STONE);
   const obj = {};
-  const s = (x, y, v) => { obj[`${x},${y}`] = v; };
-  // Forge furnace (4×6 tiles)
-  for (let fy = 0; fy < 6; fy++)
-    for (let fx = 0; fx < 4; fx++)
-      s(3 + fx, fy, F(fx, fy));
-  // Potion shelf left
-  s(1, 2, O(0, 4)); s(2, 2, O(1, 4));
-  s(1, 3, O(0, 5)); s(2, 3, O(1, 5));
-  s(1, 4, O(0, 6)); s(2, 4, O(1, 6));
-  s(1, 5, O(0, 7)); s(2, 5, O(1, 7));
-  // Crates
-  s(1, 6, O(0, 26)); s(2, 6, O(1, 26));
-  s(1, 7, O(0, 27)); s(2, 7, O(1, 27));
-  // Vase
-  s(7, 6, O(0, 34)); s(7, 7, O(0, 35));
+  blk(obj, 4, 0, F, 0, 0, 4, 6);          // forge furnace center
+  blk(obj, 1, 2, O, 0, 4, 3, 4);           // potion shelf A left
+  blk(obj, 8, 2, O, 3, 4, 3, 4);           // potion shelf B right
+  blk(obj, 1, 6, O, 8, 34, 2, 3);          // floor items A bottom-left
+  blk(obj, 8, 6, O, 10, 34, 2, 3);         // floor items B bottom-right
   return { base, objects: [obj], name: 'forge' };
 }
 
-// 2. LIBRARY (Memory) — Wood floor, big shelves, rug
+// 2. LIBRARY — Wood floor. Three bookshelves across back wall, reading counter, carpet.
 function libraryRoom() {
-  const base = makeRoom(WOOD_FLOOR);
+  const base = makeRoom(WOOD);
   const obj = {};
-  const s = (x, y, v) => { obj[`${x},${y}`] = v; };
-  // Left cabinet (potion display = our "books")
-  s(1, 2, O(0, 4)); s(2, 2, O(1, 4)); s(3, 2, O(2, 4));
-  s(1, 3, O(0, 5)); s(2, 3, O(1, 5)); s(3, 3, O(2, 5));
-  s(1, 4, O(0, 6)); s(2, 4, O(1, 6)); s(3, 4, O(2, 6));
-  s(1, 5, O(0, 7)); s(2, 5, O(1, 7)); s(3, 5, O(2, 7));
-  // Right cabinet (different style c4-c6)
-  s(5, 2, O(4, 4)); s(6, 2, O(5, 4)); s(7, 2, O(6, 4));
-  s(5, 3, O(4, 5)); s(6, 3, O(5, 5)); s(7, 3, O(6, 5));
-  s(5, 4, O(4, 6)); s(6, 4, O(5, 6)); s(7, 4, O(6, 6));
-  s(5, 5, O(4, 7)); s(6, 5, O(5, 7)); s(7, 5, O(6, 7));
-  // Stained glass lantern between
-  s(4, 2, O(0, 16)); s(4, 3, O(0, 17));
-  // Rug
-  s(3, 6, O(0, 24)); s(4, 6, O(1, 24)); s(5, 6, O(2, 24));
-  s(3, 7, O(0, 25)); s(4, 7, O(1, 25)); s(5, 7, O(2, 25));
-  // Small pots
-  s(1, 7, O(2, 34)); s(7, 7, O(4, 34));
+  blk(obj, 1, 2, O, 0, 8, 3, 4);           // filled bookshelf A (left)
+  blk(obj, 4, 2, O, 6, 8, 3, 4);           // filled bookshelf C (center)
+  blk(obj, 7, 2, O, 3, 8, 3, 4);           // filled bookshelf B (right)
+  blk(obj, 3, 6, O, 2, 0, 5, 2);           // counter/reading desk center
+  // flower vases on sides
+  obj['1,7'] = O(4, 33); obj['1,8'] = O(4, 34);
+  obj['9,7'] = O(6, 33); obj['9,8'] = O(6, 34);
   return { base, objects: [obj], name: 'library' };
 }
 
-// 3. RESEARCH (Study) — Stone floor, stained glass display, plants
+// 3. RESEARCH — Stone floor. Stained glass dragon centerpiece, lantern, diamond rugs.
 function researchRoom() {
-  const base = makeRoom(DARK_FLOOR);
+  const base = makeRoom(STONE);
   const obj = {};
-  const s = (x, y, v) => { obj[`${x},${y}`] = v; };
-  // Large stained glass display (the purple dragon/crystal)
-  s(3, 2, O(5, 19)); s(4, 2, O(6, 19)); s(5, 2, O(7, 19)); s(6, 2, O(8, 19));
-  s(3, 3, O(5, 20)); s(4, 3, O(6, 20)); s(5, 3, O(7, 20)); s(6, 3, O(8, 20));
-  s(3, 4, O(5, 21)); s(4, 4, O(6, 21)); s(5, 4, O(7, 21)); s(6, 4, O(8, 21));
-  s(3, 5, O(5, 22)); s(4, 5, O(6, 22)); s(5, 5, O(7, 22)); s(6, 5, O(8, 22));
-  // Crystal plant left
-  s(1, 3, O(0, 19)); s(2, 3, O(1, 19));
-  s(1, 4, O(0, 20)); s(2, 4, O(1, 20));
-  s(1, 5, O(0, 21)); s(2, 5, O(1, 21));
-  // Shelf right
-  s(7, 2, O(4, 4)); s(7, 3, O(4, 5)); s(7, 4, O(4, 6)); s(7, 5, O(4, 7));
-  // Floor items
-  s(2, 7, O(8, 34)); s(3, 7, O(9, 34));
-  s(6, 7, O(4, 36)); s(7, 7, O(5, 36));
-  // Light
-  s(1, 2, L(0, 0)); s(2, 2, L(1, 0));
+  blk(obj, 4, 2, O, 7, 16, 4, 4);          // stained glass dragon center ★
+  blk(obj, 1, 2, O, 0, 16, 2, 4);          // amber lantern left
+  blk(obj, 8, 2, O, 2, 16, 2, 4);          // diamond rug A right
+  blk(obj, 4, 6, O, 0, 24, 4, 3);          // carpet bottom center
+  // potted plant bottom-left
+  blk(obj, 1, 6, O, 11, 17, 2, 3);
   return { base, objects: [obj], name: 'research' };
 }
 
-// 4. WORKSHOP (Deploy) — Stone floor, crates, barrels, wheelbarrow
+// 4. WORKSHOP — Wood floor. Empty shelves for tools, counter workbench, barrels/crates.
 function workshopRoom() {
-  const base = makeRoom(() => STONE_FLOOR());
+  const base = makeRoom(WOOD);
   const obj = {};
-  const s = (x, y, v) => { obj[`${x},${y}`] = v; };
-  // Shelf top wall
-  s(1, 2, O(0, 8)); s(2, 2, O(1, 8)); s(3, 2, O(2, 8));
-  s(1, 3, O(0, 9)); s(2, 3, O(1, 9)); s(3, 3, O(2, 9));
-  s(1, 4, O(0, 10)); s(2, 4, O(1, 10)); s(3, 4, O(2, 10));
-  s(1, 5, O(0, 11)); s(2, 5, O(1, 11)); s(3, 5, O(2, 11));
-  // Crates stacked right
-  s(6, 5, O(3, 26)); s(7, 5, O(4, 26));
-  s(6, 6, O(3, 27)); s(7, 6, O(4, 27));
-  s(5, 6, O(0, 26)); s(5, 7, O(0, 27));
-  // Wheelbarrow
-  s(6, 3, O(7, 25)); s(7, 3, O(8, 25));
-  // Coal pile
-  s(6, 7, O(9, 25)); s(7, 7, O(10, 25));
-  // Crates left
-  s(1, 6, O(0, 26)); s(2, 6, O(1, 26));
-  s(1, 7, O(0, 27)); s(2, 7, O(1, 27));
-  // Light
-  s(5, 2, L(0, 0)); s(6, 2, L(1, 0));
-  s(5, 3, L(0, 1)); s(6, 3, L(1, 1));
-  s(5, 4, L(0, 2)); s(6, 4, L(1, 2));
+  blk(obj, 1, 2, O, 0, 12, 3, 4);          // empty shelf A (left)
+  blk(obj, 7, 2, O, 3, 12, 3, 4);          // empty shelf B (right)
+  blk(obj, 3, 5, O, 3, 0, 5, 2);           // counter workbench center
+  blk(obj, 1, 7, O, 8, 27, 2, 2);          // barrel bottom-left
+  blk(obj, 8, 7, O, 0, 27, 2, 2);          // wardrobe bottom-right
+  // light top-center
+  blk(obj, 5, 2, L, 0, 0, 2, 3);
   return { base, objects: [obj], name: 'workshop' };
 }
 
-// 5. FRONT DESK (Comms) — Wood floor, counter, stained glass, display
+// 5. FRONT DESK — Wood floor. Long counter, display rugs, carpet.
 function frontDeskRoom() {
-  const base = makeRoom(WOOD_FLOOR);
+  const base = makeRoom(WOOD);
   const obj = {};
-  const s = (x, y, v) => { obj[`${x},${y}`] = v; };
-  // Stained glass on back wall
-  s(3, 2, O(6, 16)); s(4, 2, O(7, 16)); s(5, 2, O(8, 16)); s(6, 2, O(9, 16));
-  s(3, 3, O(6, 17)); s(4, 3, O(7, 17)); s(5, 3, O(8, 17)); s(6, 3, O(9, 17));
-  s(3, 4, O(6, 18)); s(4, 4, O(7, 18)); s(5, 4, O(8, 18)); s(6, 4, O(9, 18));
-  // Shelves on sides
-  s(1, 2, O(4, 8)); s(2, 2, O(5, 8));
-  s(1, 3, O(4, 9)); s(2, 3, O(5, 9));
-  s(1, 4, O(4, 10)); s(2, 4, O(5, 10));
-  s(1, 5, O(4, 11)); s(2, 5, O(5, 11));
-  s(7, 2, O(6, 8)); s(7, 3, O(6, 9)); s(7, 4, O(6, 10)); s(7, 5, O(6, 11));
-  // Counter
-  s(2, 5, O(0, 0)); s(3, 5, O(1, 0)); s(4, 5, O(2, 0)); s(5, 5, O(3, 0)); s(6, 5, O(4, 0));
-  s(2, 6, O(0, 1)); s(3, 6, O(1, 1)); s(4, 6, O(2, 1)); s(5, 6, O(3, 1)); s(6, 6, O(4, 1));
-  // Decorative
-  s(3, 4, O(5, 34)); s(5, 4, O(2, 34));
-  s(7, 7, O(7, 34));
+  blk(obj, 1, 2, O, 0, 0, 9, 2);           // long counter bar across back
+  blk(obj, 1, 4, O, 2, 16, 2, 4);          // diamond rug A left display
+  blk(obj, 8, 4, O, 4, 16, 2, 4);          // diamond rug B right display
+  blk(obj, 4, 5, O, 0, 24, 4, 3);          // carpet center
+  // flower vases
+  obj['4,4'] = O(5, 33); obj['4,5'] = O(5, 34);  // wrong: overlaps carpet. Move.
+  obj['7,4'] = O(7, 33); obj['7,5'] = O(7, 34);
   return { base, objects: [obj], name: 'front_desk' };
 }
 
-// 6. HEARTH (Idle) — Wood floor, beds, rug, light, cozy
+// 6. HEARTH — Wood floor. Couches, beds, table, carpet, warm light.
 function hearthRoom() {
-  const base = makeRoom(WOOD_FLOOR);
+  const base = makeRoom(WOOD);
   const obj = {};
-  const s = (x, y, v) => { obj[`${x},${y}`] = v; };
-  // Warm light
-  s(4, 2, L(0, 0)); s(5, 2, L(1, 0));
-  s(4, 3, L(0, 1)); s(5, 3, L(1, 1));
-  s(4, 4, L(0, 2)); s(5, 4, L(1, 2));
+  // Furniture row across back
+  blk(obj, 1, 2, O, 0, 30, 2, 2);          // brown couch left
+  blk(obj, 4, 2, O, 3, 30, 2, 2);          // bed/daybed center-left
+  blk(obj, 7, 2, O, 9, 30, 2, 2);          // blue bench right
+  // Second row: tables
+  blk(obj, 1, 4, O, 0, 32, 2, 2);          // table with flowers left
+  blk(obj, 4, 4, O, 5, 32, 2, 2);          // blue couch center
+  blk(obj, 8, 4, O, 11, 32, 2, 2);         // large brown table right
   // Carpet
-  s(3, 5, O(0, 24)); s(4, 5, O(1, 24)); s(5, 5, O(2, 24));
-  s(3, 6, O(0, 25)); s(4, 6, O(1, 25)); s(5, 6, O(2, 25));
-  // Beds
-  s(1, 4, O(0, 28)); s(2, 4, O(1, 28));
-  s(1, 5, O(0, 29)); s(2, 5, O(1, 29));
-  s(1, 6, O(0, 30)); s(2, 6, O(1, 30));
-  s(6, 4, O(3, 28)); s(7, 4, O(4, 28));
-  s(6, 5, O(3, 29)); s(7, 5, O(4, 29));
-  s(6, 6, O(3, 30)); s(7, 6, O(4, 30));
-  // Plants
-  s(1, 2, O(4, 8)); s(2, 2, O(5, 8));
-  s(1, 3, O(4, 9)); s(2, 3, O(5, 9));
-  s(7, 2, O(9, 16)); s(7, 3, O(9, 17));
-  // Flower vases
-  s(1, 7, O(3, 32)); s(2, 7, O(4, 32));
-  s(6, 7, O(6, 33)); s(7, 7, O(7, 33));
+  blk(obj, 4, 6, O, 0, 24, 4, 3);          // carpet bottom center
+  // Warm light
+  blk(obj, 6, 2, L, 0, 0, 2, 3);
+  // Flower vases at sides
+  obj['1,7'] = O(4, 33); obj['1,8'] = O(4, 34);
+  obj['9,7'] = O(6, 33); obj['9,8'] = O(6, 34);
   return { base, objects: [obj], name: 'hearth' };
 }
 
-// ─── Assemble ───
+// ─── Assemble 3×2 grid ───
 const rooms = [forgeRoom(), libraryRoom(), researchRoom(), workshopRoom(), frontDeskRoom(), hearthRoom()];
 const COLS = 3, GAP = 1;
 const gridW = COLS * RW + (COLS - 1) * GAP;
@@ -205,7 +186,7 @@ const allLayers = [
 
 const roomPositions = {};
 const zoneMap = { forge: 'coding', library: 'memory', research: 'research', workshop: 'deploy', front_desk: 'comms', hearth: 'idle' };
-const zoneLabels = { forge: '🔥 FORGE', library: '📚 LIBRARY', research: '🔬 RESEARCH', workshop: '⚒️ WORKSHOP', front_desk: '🪧 FRONT DESK', hearth: '☕ HEARTH' };
+const zoneLabels = { forge: '🔥 FORGE', library: '📚 LIBRARY', research: '🔬 RESEARCH', workshop: '⚒️ WORKSHOP', front_desk: '💬 FRONT DESK', hearth: '☕ HEARTH' };
 
 for (let ri = 0; ri < rooms.length; ri++) {
   const room = rooms[ri];
@@ -215,19 +196,19 @@ for (let ri = 0; ri < rooms.length; ri++) {
 
   for (const [k, v] of Object.entries(room.base)) {
     const [x, y] = k.split(',').map(Number);
-    allLayers[0].tiles[`${ox+x},${oy+y}`] = v;
+    allLayers[0].tiles[`${ox + x},${oy + y}`] = v;
   }
   for (const ol of room.objects) {
     for (const [k, v] of Object.entries(ol)) {
       const [x, y] = k.split(',').map(Number);
-      allLayers[1].tiles[`${ox+x},${oy+y}`] = v;
+      allLayers[1].tiles[`${ox + x},${oy + y}`] = v;
     }
   }
 }
 
 writeFileSync('client/public/assets/rooms.json', JSON.stringify(roomPositions));
 writeFileSync('client/public/assets/rooms-tilemap.json', JSON.stringify({
-  bounds: { minX: 0, minY: 0, maxX: gridW-1, maxY: gridH-1, width: gridW, height: gridH },
+  bounds: { minX: 0, minY: 0, maxX: gridW - 1, maxY: gridH - 1, width: gridW, height: gridH },
   rooms: roomPositions,
   layers: allLayers,
 }));
