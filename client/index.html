@@ -6,9 +6,46 @@
   <title>Agent Dashboard</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #1a1a2e; color: #e0e0e0; font-family: 'Press Start 2P', monospace; overflow: hidden; }
-    #root { width: 100vw; height: 100vh; }
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box;
+      image-rendering: pixelated;
+      image-rendering: -moz-crisp-edges;
+      image-rendering: crisp-edges;
+    }
+    body { 
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); 
+      color: #e0e0e0; 
+      font-family: 'Press Start 2P', monospace; 
+      overflow: hidden; 
+      font-size: 12px;
+    }
+    #root { 
+      width: 100vw; 
+      height: 100vh; 
+    }
+    
+    /* Pixel-perfect scrollbars */
+    ::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #1a1a2e;
+      border: 1px solid #333;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #4a4a6a;
+      border: 1px solid #333;
+      border-radius: 0;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #5a5a7a;
+    }
+    ::-webkit-scrollbar-corner {
+      background: #1a1a2e;
+    }
   </style>
 </head>
 <body>
