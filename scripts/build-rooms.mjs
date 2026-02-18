@@ -90,7 +90,7 @@ function forgeRoom() {
   const obj = {};
   blk(obj, 4, 0, F, 0, 0, 4, 6);          // forge furnace center
   blk(obj, 1, 2, O, 0, 4, 3, 4);           // potion shelf A left
-  blk(obj, 8, 2, O, 3, 4, 3, 4);           // potion shelf B right
+  blk(obj, 7, 2, O, 3, 4, 3, 4);           // potion shelf B right (moved from 8→7 to avoid wall overlap)
   blk(obj, 1, 6, O, 8, 34, 2, 3);          // floor items A bottom-left
   blk(obj, 8, 6, O, 10, 34, 2, 3);         // floor items B bottom-right
   return { base, objects: [obj], name: 'forge' };
@@ -116,7 +116,7 @@ function researchRoom() {
   const obj = {};
   blk(obj, 4, 2, O, 7, 16, 4, 4);          // stained glass dragon center ★
   blk(obj, 1, 2, O, 0, 16, 2, 4);          // amber lantern left
-  blk(obj, 8, 2, O, 2, 16, 2, 4);          // diamond rug A right
+  blk(obj, 8, 3, O, 2, 16, 2, 3);          // diamond rug A right (shifted down, trimmed to avoid shadow bleed)
   blk(obj, 4, 6, O, 0, 24, 4, 3);          // carpet bottom center
   // potted plant bottom-left
   blk(obj, 1, 6, O, 11, 17, 2, 3);
@@ -142,12 +142,11 @@ function frontDeskRoom() {
   const base = makeRoom(WOOD);
   const obj = {};
   blk(obj, 1, 2, O, 0, 0, 9, 2);           // long counter bar across back
-  blk(obj, 1, 4, O, 2, 16, 2, 4);          // diamond rug A left display
-  blk(obj, 8, 4, O, 4, 16, 2, 4);          // diamond rug B right display
+  blk(obj, 2, 4, O, 2, 16, 2, 4);          // diamond rug A left (shifted from wall)
+  blk(obj, 7, 4, O, 4, 16, 2, 4);          // diamond rug B right (shifted from wall)
   blk(obj, 4, 5, O, 0, 24, 4, 3);          // carpet center
-  // flower vases
-  obj['4,4'] = O(5, 33); obj['4,5'] = O(5, 34);  // wrong: overlaps carpet. Move.
-  obj['7,4'] = O(7, 33); obj['7,5'] = O(7, 34);
+  // flower vases between rugs and carpet
+  obj['4,4'] = O(5, 33); obj['5,4'] = O(7, 33);
   return { base, objects: [obj], name: 'front_desk' };
 }
 
@@ -155,18 +154,18 @@ function frontDeskRoom() {
 function hearthRoom() {
   const base = makeRoom(WOOD);
   const obj = {};
-  // Furniture row across back
+  // Furniture row across back (spaced to avoid overlaps)
   blk(obj, 1, 2, O, 0, 30, 2, 2);          // brown couch left
   blk(obj, 4, 2, O, 3, 30, 2, 2);          // bed/daybed center-left
-  blk(obj, 7, 2, O, 9, 30, 2, 2);          // blue bench right
+  blk(obj, 8, 2, O, 9, 30, 2, 2);          // blue bench right (moved from 7→8)
   // Second row: tables
   blk(obj, 1, 4, O, 0, 32, 2, 2);          // table with flowers left
-  blk(obj, 4, 4, O, 5, 32, 2, 2);          // blue couch center
+  blk(obj, 5, 4, O, 5, 32, 2, 2);          // blue couch center (moved from 4→5)
   blk(obj, 8, 4, O, 11, 32, 2, 2);         // large brown table right
   // Carpet
   blk(obj, 4, 6, O, 0, 24, 4, 3);          // carpet bottom center
-  // Warm light
-  blk(obj, 6, 2, L, 0, 0, 2, 3);
+  // Warm light (moved to avoid bench overlap)
+  blk(obj, 6, 2, L, 0, 0, 2, 2);           // 2×2 light (trimmed from 2×3)
   // Flower vases at sides
   obj['1,7'] = O(4, 33); obj['1,8'] = O(4, 34);
   obj['9,7'] = O(6, 33); obj['9,8'] = O(6, 34);
